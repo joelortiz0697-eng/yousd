@@ -1,0 +1,63 @@
+import { useTheme } from "../context/ThemeContext";
+import { TABS } from "../utils/storage";
+import Icon from "./Icon";
+
+export default function BottomNav({ active, onChange }) {
+  const { C } = useTheme();
+  return (
+    <nav
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        paddingBottom: "env(safe-area-inset-bottom)",
+        boxShadow: C.mode === "dark" ? "0 -8px 24px rgba(0,0,0,0.3)" : "0 -6px 18px rgba(30,42,64,0.06)",
+      }}
+    >
+      <div style={{ maxWidth: 560, margin: "0 auto", display: "flex" }}>
+        {TABS.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(t.id)}
+              style={{
+                flex: 1,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                padding: "9px 2px 8px",
+                color: isActive ? C.accent : C.muted,
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 26,
+                  borderRadius: 9,
+                  background: isActive ? C.accentSoft : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                <Icon name={t.icon} size={18} strokeWidth={isActive ? 2.3 : 2} />
+              </div>
+              <span style={{ fontSize: 10.5, fontWeight: isActive ? 700 : 600 }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
