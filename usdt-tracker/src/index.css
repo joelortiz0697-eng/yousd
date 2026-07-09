@@ -1,0 +1,7 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; }
+input, select, textarea, button { font-family: inherit; }
+select option { background: #111D2E; color: #DCE9F5; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1C3050; border-radius: 3px; }
