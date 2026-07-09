@@ -1,209 +1,159 @@
 import { useState } from "react";
 import { useTheme } from "../context/ThemeContext";
-import { Button, IconButton, Modal, Field, Inp, Sel, Txta, BtnGroup, EmptyState, PageHeader } from "../components/ui";
+import { Button, IconButton, Modal, Field, Inp, Sel, Txta, BtnGroup, StatCard, EmptyState, PageHeader } from "../components/ui";
 import Icon from "../components/Icon";
-import { uid, todayStr, fARS, fMoney } from "../utils/format";
+import { uid, todayStr, fARS, fUSDT } from "../utils/format";
 
-const DEU0 = { tipo: "deuda", descripcion: "", contraparte: "", monto: "", moneda: "ARS", fecha: todayStr(), interes: "", estado: "activa", notas: "" };
-const ESTADO_LABELS = { activa: "Activa", pagada: "Pagada", retirada: "Retirada", cancelada: "Cancelada" };
+const OP0 = { tipo: "compra", usdt: "", precio: "", total: "", fecha: todayStr(), metodo: "efectivo", notas: "" };
 
-export default function DeudasInversiones({ deu, onSave }) {
+export default function Operaciones({ ops, onSave }) {
   const { C } = useTheme();
-  const ESTADO_COLORS = { activa: C.warn, pagada: C.buy, retirada: C.buy, cancelada: C.mutedSoft };
   const [show, setShow] = useState(false);
-  const [form, setForm] = useState(DEU0);
+  const [form, setForm] = useState(OP0);
   const [editId, setEditId] = useState(null);
-  const [tab, setTab] = useState("deuda");
+  const [filter, setFilter] = useState("todos");
 
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const set = (k, v) => {
+    const next = { ...form, [k]: v };
+    if ((k === "usdt" || k === "precio") && next.usdt && next.precio) next.total = (parseFloat(next.usdt) * parseFloat(next.precio)).toFixed(2);
+    setForm(next);
+  };
   const openAdd = () => {
-    setForm({ ...DEU0, tipo: tab });
+    setForm(OP0);
     setEditId(null);
     setShow(true);
   };
-  const openEdit = (d) => {
-    setForm({ ...d });
-    setEditId(d.id);
+  const openEdit = (op) => {
+    setForm({ ...op });
+    setEditId(op.id);
     setShow(true);
   };
-  const del = (id) => onSave(deu.filter((d) => d.id !== id));
+  const del = (id) => onSave(ops.filter((o) => o.id !== id));
   const save = () => {
-    if (!form.descripcion || !form.monto) return;
-    const next = editId ? deu.map((d) => (d.id === editId ? { ...form, id: editId } : d)) : [...deu, { ...form, id: uid() }];
+    if (!form.usdt || !form.precio) return;
+    const next = editId ? ops.map((o) => (o.id === editId ? { ...form, id: editId } : o)) : [{ ...form, id: uid() }, ...ops];
     onSave(next);
     setShow(false);
   };
 
-  const items = deu.filter((d) => d.tipo === tab);
-  const activas = items.filter((d) => d.estado === "activa");
-  const inactivas = items.filter((d) => d.estado !== "activa");
-  const totalActivo = activas.reduce((s, d) => s + +d.monto, 0);
-
-  const renderItem = (d) => (
-    <div
-      key={d.id}
-      style={{
-        background: C.card,
-        border: `1px solid ${C.border}`,
-        borderRadius: 14,
-        padding: "14px 18px",
-        marginBottom: 8,
-        display: "flex",
-        gap: 14,
-        alignItems: "flex-start",
-        boxShadow: C.shadow,
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-          <span style={{ color: C.white, fontWeight: 700 }}>{d.descripcion}</span>
-          <span
-            style={{
-              background: ESTADO_COLORS[d.estado] + "22",
-              color: ESTADO_COLORS[d.estado],
-              borderRadius: 6,
-              padding: "2px 8px",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            {ESTADO_LABELS[d.estado] || d.estado}
-          </span>
-        </div>
-        <div style={{ color: d.tipo === "deuda" ? C.sell : C.purple, fontWeight: 800, fontSize: 18, marginBottom: 4 }}>{fMoney(d.monto, d.moneda)}</div>
-        <div style={{ color: C.muted, fontSize: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {d.contraparte && <span>👤 {d.contraparte}</span>}
-          <span>📅 {d.fecha}</span>
-          {d.interes && <span>% {d.interes} interés anual</span>}
-        </div>
-        {d.notas && <div style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>{d.notas}</div>}
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <IconButton name="edit" onClick={() => openEdit(d)} />
-        <IconButton name="trash" tone="danger" onClick={() => del(d.id)} />
-      </div>
-    </div>
-  );
+  const filtered = filter === "todos" ? ops : ops.filter((o) => o.tipo === filter);
+  const sorted = [...filtered].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const totComp = ops.filter((o) => o.tipo === "compra").reduce((s, o) => s + +o.usdt, 0);
+  const totVend = ops.filter((o) => o.tipo === "venta").reduce((s, o) => s + +o.usdt, 0);
+  const gasComp = ops.filter((o) => o.tipo === "compra").reduce((s, o) => s + +o.total, 0);
+  const ingVent = ops.filter((o) => o.tipo === "venta").reduce((s, o) => s + +o.total, 0);
 
   return (
     <div>
       <PageHeader
-        title="Deudas & Inversiones"
+        title="Operaciones USDT"
         action={
           <Button onClick={openAdd}>
-            <Icon name="plus" size={15} /> Agregar
+            <Icon name="plus" size={15} /> Nueva
           </Button>
         }
       />
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <button
-          onClick={() => setTab("deuda")}
-          style={{
-            border: `1px solid ${C.border}`,
-            cursor: "pointer",
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: 13,
-            padding: "9px 16px",
-            background: tab === "deuda" ? C.sell : C.card,
-            color: tab === "deuda" ? "#fff" : C.muted,
-          }}
-        >
-          💳 Deudas
-        </button>
-        <button
-          onClick={() => setTab("inversion")}
-          style={{
-            border: `1px solid ${C.border}`,
-            cursor: "pointer",
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: 13,
-            padding: "9px 16px",
-            background: tab === "inversion" ? C.purple : C.card,
-            color: tab === "inversion" ? "#fff" : C.muted,
-          }}
-        >
-          📈 Inversiones
-        </button>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+        <StatCard label="Comprado" value={fUSDT(totComp)} icon="down" color={C.buy} sub={fARS(gasComp)} />
+        <StatCard label="Vendido" value={fUSDT(totVend)} icon="up" color={C.sell} sub={fARS(ingVent)} />
+        <StatCard label="Balance neto" value={fUSDT(totComp - totVend)} icon="swap" color={C.accent} />
       </div>
-      {activas.length > 0 && (
-        <div
-          style={{
-            background: C.card,
-            border: `1px solid ${(tab === "deuda" ? C.sell : C.purple)}44`,
-            borderRadius: 14,
-            padding: "14px 18px",
-            marginBottom: 20,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            boxShadow: C.shadow,
-          }}
-        >
-          <span style={{ color: C.muted, fontSize: 13, fontWeight: 600 }}>Total {tab === "deuda" ? "deudas" : "inversiones"} activas</span>
-          <span style={{ color: tab === "deuda" ? C.sell : C.purple, fontWeight: 800, fontSize: 20 }}>{fARS(totalActivo)}</span>
-        </div>
-      )}
-      {items.length === 0 && <EmptyState icon="card" text={`No hay ${tab === "deuda" ? "deudas" : "inversiones"} registradas.`} />}
-      {activas.map(renderItem)}
-      {inactivas.length > 0 && (
-        <>
-          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px", margin: "20px 0 12px", fontWeight: 700 }}>Historial</div>
-          {inactivas.map(renderItem)}
-        </>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {["todos", "compra", "venta"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setFilter(t)}
+            style={{
+              border: `1px solid ${C.border}`,
+              cursor: "pointer",
+              borderRadius: 10,
+              fontWeight: 700,
+              fontSize: 12.5,
+              padding: "8px 15px",
+              background: filter === t ? C.accent : C.card,
+              color: filter === t ? "#04140F" : C.muted,
+            }}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+      {sorted.length === 0 ? (
+        <EmptyState icon="swap" text="No hay operaciones. ¡Agregá la primera!" />
+      ) : (
+        sorted.map((op) => (
+          <div
+            key={op.id}
+            style={{
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              padding: "14px 16px",
+              marginBottom: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              boxShadow: C.shadow,
+            }}
+          >
+            <div style={{ width: 4, borderRadius: 4, height: 46, background: op.tipo === "compra" ? C.buy : C.sell, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ color: op.tipo === "compra" ? C.buy : C.sell, fontWeight: 700, textTransform: "uppercase", fontSize: 11 }}>{op.tipo}</span>
+                <span style={{ color: C.white, fontWeight: 700, fontSize: 15 }}>{fUSDT(op.usdt)}</span>
+                <span style={{ color: C.muted, fontSize: 13 }}>→ {fARS(op.total)}</span>
+              </div>
+              <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>
+                {fARS(op.precio)}/USDT · {op.metodo} · {op.fecha}
+              </div>
+              {op.notas && <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{op.notas}</div>}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <IconButton name="edit" onClick={() => openEdit(op)} />
+              <IconButton name="trash" tone="danger" onClick={() => del(op.id)} />
+            </div>
+          </div>
+        ))
       )}
       {show && (
-        <Modal title={editId ? "Editar" : `Nueva ${tab === "deuda" ? "deuda" : "inversión"}`} onClose={() => setShow(false)}>
+        <Modal title={editId ? "Editar operación" : "Nueva operación"} onClose={() => setShow(false)}>
           <Field label="Tipo">
             <BtnGroup
               options={[
-                { value: "deuda", label: "💳 Deuda" },
-                { value: "inversion", label: "📈 Inversión" },
+                { value: "compra", label: "📥 Compra" },
+                { value: "venta", label: "📤 Venta" },
               ]}
               value={form.tipo}
               onChange={(v) => set("tipo", v)}
-              colorFn={(v) => (v === "deuda" ? C.sell : C.purple)}
+              colorFn={(v) => (v === "compra" ? C.buy : C.sell)}
             />
           </Field>
-          <Field label="Descripción">
-            <Inp value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} placeholder="ej: Préstamo a Juan..." />
+          <Field label="Cantidad USDT">
+            <Inp type="number" value={form.usdt} onChange={(e) => set("usdt", e.target.value)} placeholder="ej: 100" />
           </Field>
-          <Field label="Contraparte">
-            <Inp value={form.contraparte} onChange={(e) => set("contraparte", e.target.value)} placeholder="ej: Juan García" />
+          <Field label="Precio por USDT (ARS)">
+            <Inp type="number" value={form.precio} onChange={(e) => set("precio", e.target.value)} placeholder="ej: 1200" />
           </Field>
-          <Field label="Monto">
-            <Inp type="number" value={form.monto} onChange={(e) => set("monto", e.target.value)} placeholder="0.00" />
-          </Field>
-          <Field label="Moneda">
-            <BtnGroup
-              options={[
-                { value: "ARS", label: "ARS" },
-                { value: "USD", label: "USD" },
-                { value: "USDT", label: "USDT" },
-              ]}
-              value={form.moneda}
-              onChange={(v) => set("moneda", v)}
-            />
+          <Field label="Total ARS (auto-calculado)">
+            <Inp type="number" value={form.total} onChange={(e) => set("total", e.target.value)} />
           </Field>
           <Field label="Fecha">
             <Inp type="date" value={form.fecha} onChange={(e) => set("fecha", e.target.value)} />
           </Field>
-          <Field label="Interés anual %">
-            <Inp type="number" value={form.interes} onChange={(e) => set("interes", e.target.value)} placeholder="ej: 5" />
-          </Field>
-          <Field label="Estado">
-            <Sel value={form.estado} onChange={(e) => set("estado", e.target.value)}>
-              <option value="activa">Activa</option>
-              <option value={form.tipo === "deuda" ? "pagada" : "retirada"}>{form.tipo === "deuda" ? "Pagada" : "Retirada"}</option>
-              <option value="cancelada">Cancelada</option>
+          <Field label="Método de pago">
+            <Sel value={form.metodo} onChange={(e) => set("metodo", e.target.value)}>
+              {["efectivo", "transferencia", "crypto", "otro"].map((m) => (
+                <option key={m} value={m}>
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
+                </option>
+              ))}
             </Sel>
           </Field>
-          <Field label="Notas">
+          <Field label="Notas (opcional)">
             <Txta value={form.notas} onChange={(e) => set("notas", e.target.value)} />
           </Field>
           <Button full size="lg" onClick={save}>
-            {editId ? "Guardar cambios" : "Registrar"}
+            {editId ? "Guardar cambios" : "Registrar operación"}
           </Button>
         </Modal>
       )}

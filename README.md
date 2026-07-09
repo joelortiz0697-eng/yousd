@@ -1,171 +1,212 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { useState } from "react";
 import { useTheme } from "../context/ThemeContext";
-import { Card, StatCard, EmptyState } from "../components/ui";
+import { Button, IconButton, Modal, Field, Inp, Sel, Txta, BtnGroup, EmptyState, PageHeader } from "../components/ui";
 import Icon from "../components/Icon";
-import { fARS, fUSDT, isSameMonth, prevMonthDate } from "../utils/format";
-import { PIE_COLORS } from "../utils/storage";
+import { uid, todayStr, fARS, fMoney } from "../utils/format";
 
-// Beneficio neto del mes = (ventas - compras) de operaciones USDT
-// menos los gastos en efectivo registrados ese mismo mes.
-function calcBeneficio(ops, gas, ref = new Date()) {
-  const opsMes = ops.filter((o) => isSameMonth(o.fecha, ref));
-  const gasMes = gas.filter((g) => isSameMonth(g.fecha, ref));
-  const ventas = opsMes.filter((o) => o.tipo === "venta").reduce((s, o) => s + +o.total, 0);
-  const compras = opsMes.filter((o) => o.tipo === "compra").reduce((s, o) => s + +o.total, 0);
-  const gastos = gasMes.reduce((s, g) => s + +g.monto, 0);
-  return { beneficio: ventas - compras - gastos, ventas, compras, gastos };
-}
+const DEU0 = { tipo: "deuda", descripcion: "", contraparte: "", monto: "", moneda: "ARS", fecha: todayStr(), interes: "", estado: "activa", notas: "" };
+const ESTADO_LABELS = { activa: "Activa", pagada: "Pagada", retirada: "Retirada", cancelada: "Cancelada" };
 
-export default function Dashboard({ ops, bal, deu, gas }) {
+export default function DeudasInversiones({ deu, onSave }) {
   const { C } = useTheme();
-  const now = new Date();
+  const ESTADO_COLORS = { activa: C.warn, pagada: C.buy, retirada: C.buy, cancelada: C.mutedSoft };
+  const [show, setShow] = useState(false);
+  const [form, setForm] = useState(DEU0);
+  const [editId, setEditId] = useState(null);
+  const [tab, setTab] = useState("deuda");
 
-  const totalUSDT = bal.filter((b) => b.moneda === "USDT").reduce((s, b) => s + +b.monto, 0);
-  const totalARS = bal.filter((b) => b.moneda === "ARS").reduce((s, b) => s + +b.monto, 0);
-  const totalUSD = bal.filter((b) => b.moneda === "USD").reduce((s, b) => s + +b.monto, 0);
-  const deudas = deu.filter((d) => d.tipo === "deuda" && d.estado === "activa").reduce((s, d) => s + +d.monto, 0);
-  const invers = deu.filter((d) => d.tipo === "inversion" && d.estado === "activa").reduce((s, d) => s + +d.monto, 0);
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const openAdd = () => {
+    setForm({ ...DEU0, tipo: tab });
+    setEditId(null);
+    setShow(true);
+  };
+  const openEdit = (d) => {
+    setForm({ ...d });
+    setEditId(d.id);
+    setShow(true);
+  };
+  const del = (id) => onSave(deu.filter((d) => d.id !== id));
+  const save = () => {
+    if (!form.descripcion || !form.monto) return;
+    const next = editId ? deu.map((d) => (d.id === editId ? { ...form, id: editId } : d)) : [...deu, { ...form, id: uid() }];
+    onSave(next);
+    setShow(false);
+  };
 
-  const { beneficio, ventas, compras, gastos: gastosMes } = calcBeneficio(ops, gas, now);
-  const { beneficio: beneficioPrev } = calcBeneficio(ops, gas, prevMonthDate(now));
-  const trend =
-    beneficioPrev !== 0 ? ((beneficio - beneficioPrev) / Math.abs(beneficioPrev)) * 100 : beneficio !== 0 ? 100 : 0;
+  const items = deu.filter((d) => d.tipo === tab);
+  const activas = items.filter((d) => d.estado === "activa");
+  const inactivas = items.filter((d) => d.estado !== "activa");
+  const totalActivo = activas.reduce((s, d) => s + +d.monto, 0);
 
-  const lastOps = [...ops].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 5);
-  const porCat = {};
-  gas.forEach((g) => {
-    porCat[g.categoria] = (porCat[g.categoria] || 0) + +g.monto;
-  });
-  const pieData = Object.entries(porCat).map(([name, value]) => ({ name, value }));
-
-  const monthLabel = now.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+  const renderItem = (d) => (
+    <div
+      key={d.id}
+      style={{
+        background: C.card,
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: "14px 18px",
+        marginBottom: 8,
+        display: "flex",
+        gap: 14,
+        alignItems: "flex-start",
+        boxShadow: C.shadow,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+          <span style={{ color: C.white, fontWeight: 700 }}>{d.descripcion}</span>
+          <span
+            style={{
+              background: ESTADO_COLORS[d.estado] + "22",
+              color: ESTADO_COLORS[d.estado],
+              borderRadius: 6,
+              padding: "2px 8px",
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {ESTADO_LABELS[d.estado] || d.estado}
+          </span>
+        </div>
+        <div style={{ color: d.tipo === "deuda" ? C.sell : C.purple, fontWeight: 800, fontSize: 18, marginBottom: 4 }}>{fMoney(d.monto, d.moneda)}</div>
+        <div style={{ color: C.muted, fontSize: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {d.contraparte && <span>👤 {d.contraparte}</span>}
+          <span>📅 {d.fecha}</span>
+          {d.interes && <span>% {d.interes} interés anual</span>}
+        </div>
+        {d.notas && <div style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>{d.notas}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <IconButton name="edit" onClick={() => openEdit(d)} />
+        <IconButton name="trash" tone="danger" onClick={() => del(d.id)} />
+      </div>
+    </div>
+  );
 
   return (
     <div>
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ color: C.muted, fontSize: 12.5, fontWeight: 600, marginBottom: 3, textTransform: "capitalize" }}>{monthLabel}</div>
-        <h2 style={{ color: C.white, margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.4px" }}>Resumen general</h2>
+      <PageHeader
+        title="Deudas & Inversiones"
+        action={
+          <Button onClick={openAdd}>
+            <Icon name="plus" size={15} /> Agregar
+          </Button>
+        }
+      />
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button
+          onClick={() => setTab("deuda")}
+          style={{
+            border: `1px solid ${C.border}`,
+            cursor: "pointer",
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 13,
+            padding: "9px 16px",
+            background: tab === "deuda" ? C.sell : C.card,
+            color: tab === "deuda" ? "#fff" : C.muted,
+          }}
+        >
+          💳 Deudas
+        </button>
+        <button
+          onClick={() => setTab("inversion")}
+          style={{
+            border: `1px solid ${C.border}`,
+            cursor: "pointer",
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 13,
+            padding: "9px 16px",
+            background: tab === "inversion" ? C.purple : C.card,
+            color: tab === "inversion" ? "#fff" : C.muted,
+          }}
+        >
+          📈 Inversiones
+        </button>
       </div>
-
-      {/* Beneficio del mes — tarjeta destacada */}
-      <div
-        style={{
-          background: `linear-gradient(135deg, ${beneficio >= 0 ? C.accent : C.sell}, ${beneficio >= 0 ? C.accentDark : "#B33"})`,
-          borderRadius: 18,
-          padding: "20px 20px",
-          marginBottom: 16,
-          color: "#fff",
-          boxShadow: C.shadow,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon name="target" size={15} color="#fff" />
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", opacity: 0.92 }}>
-              Beneficio del mes
-            </span>
-          </div>
-          {beneficioPrev !== 0 && (
-            <span
-              style={{
-                fontSize: 11.5,
-                fontWeight: 700,
-                background: "rgba(255,255,255,0.2)",
-                borderRadius: 20,
-                padding: "3px 9px",
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-              }}
-            >
-              <Icon name={trend >= 0 ? "up" : "down"} size={11} color="#fff" />
-              {Math.abs(trend).toFixed(0)}% vs. mes pasado
-            </span>
-          )}
+      {activas.length > 0 && (
+        <div
+          style={{
+            background: C.card,
+            border: `1px solid ${(tab === "deuda" ? C.sell : C.purple)}44`,
+            borderRadius: 14,
+            padding: "14px 18px",
+            marginBottom: 20,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            boxShadow: C.shadow,
+          }}
+        >
+          <span style={{ color: C.muted, fontSize: 13, fontWeight: 600 }}>Total {tab === "deuda" ? "deudas" : "inversiones"} activas</span>
+          <span style={{ color: tab === "deuda" ? C.sell : C.purple, fontWeight: 800, fontSize: 20 }}>{fARS(totalActivo)}</span>
         </div>
-        <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 12 }}>
-          {beneficio >= 0 ? "+" : "−"}
-          {fARS(Math.abs(beneficio))}
-        </div>
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12.5, opacity: 0.95 }}>
-          <span>📤 Ventas: {fARS(ventas)}</span>
-          <span>📥 Compras: {fARS(compras)}</span>
-          <span>💸 Gastos: {fARS(gastosMes)}</span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-        <StatCard label="USDT" value={fUSDT(totalUSDT)} icon="usdt" color={C.accent} />
-        <StatCard label="Pesos" value={fARS(totalARS)} icon="bank" color={C.buy} />
-        {totalUSD > 0 && <StatCard label="Dólares" value={`U$D ${totalUSD.toFixed(2)}`} icon="card" color={C.warn} />}
-        <StatCard label="Deudas activas" value={fARS(deudas)} icon="card" color={C.sell} />
-        <StatCard label="Inversiones" value={fARS(invers)} icon="invest" color={C.purple} />
-        <StatCard label="Gastos del mes" value={fARS(gastosMes)} icon="expense" color={C.warn} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
-        <Card>
-          <h3 style={{ color: C.white, margin: "0 0 14px", fontSize: 14.5, fontWeight: 700 }}>Últimas operaciones</h3>
-          {lastOps.length === 0 ? (
-            <EmptyState icon="swap" text="Sin operaciones aún" />
-          ) : (
-            lastOps.map((op) => (
-              <div
-                key={op.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "11px 0",
-                  borderBottom: `1px solid ${C.borderSoft}`,
-                }}
-              >
-                <div>
-                  <span style={{ color: op.tipo === "compra" ? C.buy : C.sell, fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
-                    {op.tipo}{" "}
-                  </span>
-                  <span style={{ color: C.white, fontWeight: 700 }}>{fUSDT(op.usdt)}</span>
-                  <div style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>
-                    {op.fecha} · {op.metodo}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ color: C.white, fontWeight: 700 }}>{fARS(op.total)}</div>
-                  <div style={{ color: C.muted, fontSize: 11 }}>{fARS(op.precio)}/USDT</div>
-                </div>
-              </div>
-            ))
-          )}
-        </Card>
-        <Card>
-          <h3 style={{ color: C.white, margin: "0 0 14px", fontSize: 14.5, fontWeight: 700 }}>Gastos por categoría</h3>
-          {pieData.length === 0 ? (
-            <EmptyState icon="expense" text="Sin gastos registrados" />
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  label={({ name, percent }) => `${name.split(" ")[0]} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                  fontSize={10}
-                >
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => fARS(v)} contentStyle={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, borderRadius: 8 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-      </div>
+      )}
+      {items.length === 0 && <EmptyState icon="card" text={`No hay ${tab === "deuda" ? "deudas" : "inversiones"} registradas.`} />}
+      {activas.map(renderItem)}
+      {inactivas.length > 0 && (
+        <>
+          <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: "1px", margin: "20px 0 12px", fontWeight: 700 }}>Historial</div>
+          {inactivas.map(renderItem)}
+        </>
+      )}
+      {show && (
+        <Modal title={editId ? "Editar" : `Nueva ${tab === "deuda" ? "deuda" : "inversión"}`} onClose={() => setShow(false)}>
+          <Field label="Tipo">
+            <BtnGroup
+              options={[
+                { value: "deuda", label: "💳 Deuda" },
+                { value: "inversion", label: "📈 Inversión" },
+              ]}
+              value={form.tipo}
+              onChange={(v) => set("tipo", v)}
+              colorFn={(v) => (v === "deuda" ? C.sell : C.purple)}
+            />
+          </Field>
+          <Field label="Descripción">
+            <Inp value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} placeholder="ej: Préstamo a Juan..." />
+          </Field>
+          <Field label="Contraparte">
+            <Inp value={form.contraparte} onChange={(e) => set("contraparte", e.target.value)} placeholder="ej: Juan García" />
+          </Field>
+          <Field label="Monto">
+            <Inp type="number" value={form.monto} onChange={(e) => set("monto", e.target.value)} placeholder="0.00" />
+          </Field>
+          <Field label="Moneda">
+            <BtnGroup
+              options={[
+                { value: "ARS", label: "ARS" },
+                { value: "USD", label: "USD" },
+                { value: "USDT", label: "USDT" },
+              ]}
+              value={form.moneda}
+              onChange={(v) => set("moneda", v)}
+            />
+          </Field>
+          <Field label="Fecha">
+            <Inp type="date" value={form.fecha} onChange={(e) => set("fecha", e.target.value)} />
+          </Field>
+          <Field label="Interés anual %">
+            <Inp type="number" value={form.interes} onChange={(e) => set("interes", e.target.value)} placeholder="ej: 5" />
+          </Field>
+          <Field label="Estado">
+            <Sel value={form.estado} onChange={(e) => set("estado", e.target.value)}>
+              <option value="activa">Activa</option>
+              <option value={form.tipo === "deuda" ? "pagada" : "retirada"}>{form.tipo === "deuda" ? "Pagada" : "Retirada"}</option>
+              <option value="cancelada">Cancelada</option>
+            </Sel>
+          </Field>
+          <Field label="Notas">
+            <Txta value={form.notas} onChange={(e) => set("notas", e.target.value)} />
+          </Field>
+          <Button full size="lg" onClick={save}>
+            {editId ? "Guardar cambios" : "Registrar"}
+          </Button>
+        </Modal>
+      )}
     </div>
   );
 }

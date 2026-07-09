@@ -1,0 +1,153 @@
+import { useState } from "react";
+import { useTheme } from "../context/ThemeContext";
+import { Button, IconButton, Modal, Field, Inp, BtnGroup, EmptyState, PageHeader } from "../components/ui";
+import Icon from "../components/Icon";
+import { uid, fMoney } from "../utils/format";
+
+const BAL0 = { tipo: "caja", nombre: "", moneda: "ARS", monto: "", notas: "" };
+const TIPO_INFO = {
+  caja: { icon: "wallet", label: "Caja / Efectivo" },
+  banco: { icon: "bank", label: "Cuentas bancarias" },
+  wallet: { icon: "usdt", label: "Wallets crypto" },
+};
+
+export default function Balances({ bal, onSave }) {
+  const { C } = useTheme();
+  const [show, setShow] = useState(false);
+  const [form, setForm] = useState(BAL0);
+  const [editId, setEditId] = useState(null);
+
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const openAdd = () => {
+    setForm(BAL0);
+    setEditId(null);
+    setShow(true);
+  };
+  const openEdit = (b) => {
+    setForm({ ...b });
+    setEditId(b.id);
+    setShow(true);
+  };
+  const del = (id) => onSave(bal.filter((b) => b.id !== id));
+  const save = () => {
+    if (!form.nombre || !form.monto) return;
+    const next = editId ? bal.map((b) => (b.id === editId ? { ...form, id: editId } : b)) : [...bal, { ...form, id: uid() }];
+    onSave(next);
+    setShow(false);
+  };
+
+  const grupos = {};
+  bal.forEach((b) => {
+    if (!grupos[b.tipo]) grupos[b.tipo] = [];
+    grupos[b.tipo].push(b);
+  });
+
+  return (
+    <div>
+      <PageHeader
+        title="Balances"
+        action={
+          <Button onClick={openAdd}>
+            <Icon name="plus" size={15} /> Agregar
+          </Button>
+        }
+      />
+      {bal.length === 0 && <EmptyState icon="wallet" text="No hay balances registrados." />}
+      {Object.entries(grupos).map(([tipo, items]) => (
+        <div key={tipo} style={{ marginBottom: 24 }}>
+          <h3
+            style={{
+              color: C.muted,
+              fontSize: 12,
+              textTransform: "uppercase",
+              letterSpacing: "0.8px",
+              marginBottom: 12,
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+            }}
+          >
+            <Icon name={TIPO_INFO[tipo]?.icon || "wallet"} size={13} /> {TIPO_INFO[tipo]?.label || tipo}
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {items.map((b) => (
+              <div
+                key={b.id}
+                style={{
+                  background: C.card,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 14,
+                  padding: "16px 18px",
+                  minWidth: 160,
+                  flex: "1 1 160px",
+                  boxShadow: C.shadow,
+                }}
+              >
+                <div style={{ color: C.muted, fontSize: 12, marginBottom: 6, fontWeight: 600 }}>{b.nombre}</div>
+                <div style={{ color: C.white, fontWeight: 800, fontSize: 20, letterSpacing: "-0.3px" }}>{fMoney(b.monto, b.moneda)}</div>
+                <div
+                  style={{
+                    display: "inline-block",
+                    color: C.accent,
+                    background: C.accentSoft,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    marginTop: 8,
+                    padding: "2px 8px",
+                    borderRadius: 6,
+                  }}
+                >
+                  {b.moneda}
+                </div>
+                {b.notas && <div style={{ color: C.muted, fontSize: 11, marginTop: 8 }}>{b.notas}</div>}
+                <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
+                  <IconButton name="edit" onClick={() => openEdit(b)} />
+                  <IconButton name="trash" tone="danger" onClick={() => del(b.id)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {show && (
+        <Modal title={editId ? "Editar balance" : "Nuevo balance"} onClose={() => setShow(false)}>
+          <Field label="Tipo">
+            <BtnGroup
+              options={[
+                { value: "caja", label: "💵 Caja" },
+                { value: "banco", label: "🏦 Banco" },
+                { value: "wallet", label: "👛 Wallet" },
+              ]}
+              value={form.tipo}
+              onChange={(v) => set("tipo", v)}
+            />
+          </Field>
+          <Field label="Nombre">
+            <Inp value={form.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="ej: Mercado Pago, Binance..." />
+          </Field>
+          <Field label="Moneda">
+            <BtnGroup
+              options={[
+                { value: "ARS", label: "ARS" },
+                { value: "USD", label: "USD" },
+                { value: "USDT", label: "USDT" },
+              ]}
+              value={form.moneda}
+              onChange={(v) => set("moneda", v)}
+            />
+          </Field>
+          <Field label="Monto">
+            <Inp type="number" value={form.monto} onChange={(e) => set("monto", e.target.value)} placeholder="0.00" />
+          </Field>
+          <Field label="Notas (opcional)">
+            <Inp value={form.notas} onChange={(e) => set("notas", e.target.value)} />
+          </Field>
+          <Button full size="lg" onClick={save}>
+            {editId ? "Guardar cambios" : "Agregar balance"}
+          </Button>
+        </Modal>
+      )}
+    </div>
+  );
+}
